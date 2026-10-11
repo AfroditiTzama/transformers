@@ -156,7 +156,7 @@ gemma4_template = {
             "content": "text",
         },
         "tool_calls": {
-            "open_pattern": r"<\|tool_call>call:(?P<name>\w+)",
+            "open_pattern": r"<\|tool_call>call:(?P<name>[\w.-]+)",
             "close": "<tool_call|>",
             "repeats": True,
             "content": "json",
@@ -577,6 +577,25 @@ class ChatResponseTemplateParserTest(unittest.TestCase):
                 ],
             },
         )
+
+    def test_gemma4_tool_names_with_special_characters(self):
+        for tool_name in ["get-weather", "weather.api", "get_weather"]:
+            with self.subTest(tool_name=tool_name):
+                model_out = (
+                    "<|turn>model\n"
+                    f'<|tool_call>call:{tool_name}{{location:<|"|>Athens<|"|>}}<tool_call|>'
+                )
+
+                result = parse_response(model_out, gemma4_template, prefix="")
+
+                self.assertEqual(
+                    result["tool_calls"][0]["function"]["name"],
+                    tool_name,
+                )
+                self.assertEqual(
+                    result["tool_calls"][0]["function"]["arguments"],
+                    {"location": "Athens"},
+                )
 
     def test_gemma4_complex_tool_call(self):
         model_out = (
