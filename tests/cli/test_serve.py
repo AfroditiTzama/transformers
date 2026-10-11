@@ -51,7 +51,7 @@ from transformers.testing_utils import (
     require_vision,
     slow,
 )
-from transformers.utils.chat_parsing import ResponseParser
+from transformers.utils.chat_parsing import ResponseParser, parse_response
 from transformers.utils.import_utils import is_serve_available
 
 from ..test_memory_cleanup_mixin import MemoryCleanupMixin
@@ -1758,6 +1758,36 @@ class TestToolCallUnit(unittest.TestCase):
     (no server needed). Parsing logic itself is covered by
     `tests/utils/test_chat_parsing.py`; here we only check the serve-layer wiring.
     """
+
+    def test_gemma4_fallback_tool_names_with_special_characters(self):
+        """Gemma 4 serving fallback preserves hyphenated and dotted tool names."""
+        model = MagicMock()
+        model.config.model_type = "gemma4"
+
+        processor = MagicMock(spec=["tokenizer"])
+        processor.tokenizer = MagicMock(spec=[])
+
+        template = get_response_template(processor, model)
+
+        self.assertIsNotNone(template)
+
+        for tool_name in ["get-weather", "weather.api", "get_weather"]:
+            with self.subTest(tool_name=tool_name):
+                model_out = (
+                    f'<|tool_call>call:{tool_name}'
+                    '{location:<|"|>Athens<|"|>}<tool_call|>'
+                )
+
+                result = parse_response(model_out, template, prefix="")
+
+                self.assertEqual(
+                    result["tool_calls"][0]["function"]["name"],
+                    tool_name,
+                )
+                self.assertEqual(
+                    result["tool_calls"][0]["function"]["arguments"],
+                    {"location": "Athens"},
+                )
 
     def test_get_response_template_fallback(self):
         """Fallback template is returned for known model families (Qwen)."""
